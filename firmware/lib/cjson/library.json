@@ -1,0 +1,5 @@
+{
+  "name": "cjson",
+  "version": "1.7.19",
+  "description": "Vendored cJSON so native tests and firmware link the same parser"
+}

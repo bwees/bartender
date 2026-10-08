@@ -1,0 +1,30 @@
+.DS_Store
+.env
+.env.*
+*.log
+
+.claude/settings.local.json
+
+# web
+node_modules/
+web/.svelte-kit/
+web/build/
+web/.vite/
+web/coverage/
+
+# sd card staging output
+sdcard/www/
+
+# firmware
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.cache/
+firmware/compile_commands.json
+
+# Fetched by the ESP-IDF component manager when custom_sdkconfig triggers an
+# IDF build, the same way .pio/ is fetched. Not our source.
+firmware/managed_components/
+firmware/dependencies.lock
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
+!firmware/sdkconfig.defaults.*

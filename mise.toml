@@ -1,0 +1,113 @@
+[tools]
+node = "24"
+pnpm = "latest"
+
+[tasks."install:web"]
+description = "Install web dependencies"
+dir = "web"
+run = "pnpm install"
+
+[tasks."dev:web"]
+description = "Run the SvelteKit dev server"
+dir = "web"
+run = "pnpm dev"
+
+[tasks."build:web"]
+description = "Build the SvelteKit frontend"
+dir = "web"
+run = "pnpm build"
+
+[tasks."build:fw"]
+description = "Build the ESP32 firmware"
+dir = "firmware"
+run = "pio run -e advance-hmi"
+
+[tasks."upload:fw"]
+description = "Flash the firmware over USB"
+dir = "firmware"
+run = "pio run -e advance-hmi -t upload"
+
+[tasks."monitor:fw"]
+description = "Open the serial monitor"
+dir = "firmware"
+run = "pio device monitor"
+
+[tasks."test:native"]
+description = "Run hardware-free firmware unit tests on the host"
+dir = "firmware"
+run = "pio test -e native"
+
+[tasks."test:web"]
+description = "Run the web unit and component tests"
+dir = "web"
+run = "pnpm test"
+
+[tasks.test]
+description = "Run all tests"
+depends = ["test:native", "test:web"]
+
+[tasks."sd:stage"]
+description = "Build the web bundle and lay out the SD card template"
+depends = ["build:web"]
+run = """
+rm -rf sdcard/www
+mkdir -p sdcard/www sdcard/assets
+cp -R web/build/* sdcard/www/
+"""
+
+[tasks."sd:copy"]
+description = "Copy the staged card contents to a mounted SD card at /Volumes/BARTENDER"
+depends = ["sd:stage"]
+run = """
+cp -R sdcard/www sdcard/assets sdcard/recipes.json sdcard/config.json /Volumes/BARTENDER/
+"""
+
+[tasks."deploy:web"]
+description = "Push the built web bundle to the machine's SD card over WiFi"
+depends = ["build:web"]
+run = """
+set -eu
+host="${BARTENDER_HOST:-192.168.4.1}"
+root="web/build"
+[ -d "$root" ] || { echo "$root does not exist"; exit 1; }
+echo "clearing /www on the card"
+clear=$(curl -sS --max-time 60 -o /dev/null -w '%{http_code}' -X DELETE \
+  "http://$host/api/www") || clear=000
+[ "$clear" = "200" ] || { echo "could not clear /www (HTTP $clear)"; exit 1; }
+
+failures=$(mktemp)
+find "$root" -type f | sed "s|^$root/||" | sort | while read -r rel; do
+  code=$(curl -sS --max-time 60 -o /dev/null -w '%{http_code}' \
+    -T "$root/$rel" "http://$host/api/www/$rel") || code=000
+  if [ "$code" = "201" ]; then
+    echo "  ok    $rel"
+  else
+    echo "  FAIL  $rel (HTTP $code)"
+    echo "$rel (HTTP $code)" >> "$failures"
+  fi
+done
+count=$(wc -l < "$failures" | tr -d ' ')
+if [ "$count" -ne 0 ]; then
+  echo "$count file(s) failed:"
+  sed 's/^/  /' "$failures"
+  rm -f "$failures"
+  exit 1
+fi
+rm -f "$failures"
+echo "bundle uploaded to $host"
+"""
+
+[tasks."lint:web"]
+description = "Check web formatting with prettier"
+dir = "web"
+run = "pnpm lint"
+
+[tasks."check"]
+description = "Type-check the web codebase"
+dir = "web"
+run = "pnpm check"
+
+[tasks.format]
+description = "Format the web codebase"
+dir = "web"
+run = "pnpm format"
